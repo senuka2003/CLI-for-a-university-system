@@ -1,0 +1,179 @@
+@startuml new new
+skinparam classAttributeIconSize 0
+
+' --- USER MANAGEMENT ---
+abstract class Person {
+  - id: String
+  - name: String
+  - email: String
+  - password: String
+  + {abstract} displayMenu(): void
+  + getRole(): String
+}
+class Student {
+  - enrolledCourses: List<Course*>
+  + displayMenu(): void
+}
+class Lecturer {
+  + displayMenu(): void
+  + viewEnrolmentList(courseCode: String): void
+}
+class Admin {
+  + displayMenu(): void
+  + manageUsers(): void
+  + manageCourses(): void
+  + createuser(): void
+}
+Person <|-- Student : Inheritance
+Person <|-- Lecturer : Inheritance
+Person <|-- Admin : Inheritance
+
+' --- COURSE MANAGEMENT ---
+abstract class Course {
+  - code: String
+  - title: String
+  - capacity: int
+  - prerequisites: List<Course*>
+  - {static} totalCourseCount: int
+  + {abstract} getCredits(): int
+  + {abstract} calculateGrade(): void
+  + checkPrerequisites(student: Student*): boolean
+  + {static} getTotalCourseCount(): int
+  + friend operator<<(os, c: Course&): ostream&
+}
+note bottom of Course
+  totalCourseCount is static: shared across
+  ALL Course instances, incremented in the
+  constructor and decremented in the
+  destructor. Justifies the static keyword.
+end note
+
+class LectureCourse {
+  + getCredits(): int
+  + calculateGrade(): void
+}
+class LabCourse {
+  + getCredits(): int
+  + calculateGrade(): void
+}
+class ProjectCourse {
+  + getCredits(): int
+  + calculateGrade(): void
+}
+Course <|-- LectureCourse
+Course <|-- LabCourse
+Course <|-- ProjectCourse
+
+Course "0..*" o-- "0..*" Student : Aggregation (Enrolment)
+Lecturer "1" o-- "0..*" Course : teaches >
+
+' --- TIMETABLE & CLASH DETECTION ---
+class TimeSlot {
+  - day: String
+  - startTime: String
+  - endTime: String
+  - location: String
+  + operator==(other: TimeSlot): boolean
+  + friend operator<<(os, t: TimeSlot&): ostream&
+}
+class Timetable {
+  - slots: List<TimeSlot>
+  + addSlot(slot: TimeSlot): void
+  + hasClash(other: Timetable): boolean
+}
+Timetable "1" *-- "0..*" TimeSlot : Composition
+Course "1" *-- "1" Timetable : Composition
+
+' --- PERSISTENCE ---
+class "Repository<T>" as Repository {
+  + loadFromFile(filename: String): List<T>
+  + saveToFile(filename: String, data: List<T>): void
+}
+
+' --- EXCEPTIONS ---
+' Two-level hierarchy: a shared root, then grouped by subsystem, then
+' specific leaf exceptions. Lets calling code catch broadly (any
+' EnrolmentException) or narrowly (just CourseFullException).
+abstract class DomainException {
+  # message: String
+  + explicit DomainException(msg: String)
+  + what(): const char* {override}
+}
+abstract class EnrolmentException
+abstract class AttendanceException
+class TimetableClashException
+
+class PrerequisiteNotMetException {
+  + PrerequisiteNotMetException(courseCode: String)
+}
+class CourseFullException {
+  + CourseFullException(courseCode: String)
+}
+class SessionClosedException {
+  + SessionClosedException(sessionId: String)
+}
+class NotEnrolledException {
+  + NotEnrolledException(studentId: String, courseCode: String)
+}
+class DuplicateAttendanceException {
+  + DuplicateAttendanceException(studentId: String, sessionId: String)
+}
+
+std.exception <|-- DomainException
+DomainException <|-- EnrolmentException
+DomainException <|-- AttendanceException
+DomainException <|-- TimetableClashException
+EnrolmentException <|-- PrerequisiteNotMetException
+EnrolmentException <|-- CourseFullException
+AttendanceException <|-- SessionClosedException
+AttendanceException <|-- NotEnrolledException
+AttendanceException <|-- DuplicateAttendanceException
+
+note right of DomainException
+  Thrown by the domain layer
+  (Student, Course, AttendanceSession),
+  caught at the UI/menu layer only.
+end note
+
+' --- ATTENDANCE SYSTEM ---
+class AttendanceRecord {
+  - timestamp: String
+  - status: String
+  - capturedVia: String
+  - correctionReason: String
+  + AttendanceRecord(student: Student*, session: AttendanceSession*)
+}
+class AttendanceSession {
+  - sessionId: String
+  - courseCode: String
+  - isOpen: boolean
+  - duration: int
+  + close(): void
+  + markPresent(s: Student*): void
+}
+interface AttendanceCapture {
+  + {abstract} beginSession(): void
+  + {abstract} captureNext(): String
+  + {abstract} endSession(): void
+}
+class FileReplayCapture {
+  + beginSession(): void
+  + captureNext(): String
+  + endSession(): void
+}
+class RotatingCodeCapture {
+  - currentCode: String
+  + beginSession(): void
+  + captureNext(): String
+  + endSession(): void
+}
+AttendanceCapture <|.. FileReplayCapture : Realizes
+AttendanceCapture <|.. RotatingCodeCapture : Realizes
+AttendanceSession ..> AttendanceCapture : uses >
+
+AttendanceSession "1" *-- "0..*" AttendanceRecord : Composition
+AttendanceRecord "0..*" --> "1" Student : Refers to
+AttendanceRecord "0..*" --> "1" Lecturer : records correction
+Course "1" *-- "0..*" AttendanceSession : Composition
+
+@enduml
