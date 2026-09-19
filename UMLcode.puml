@@ -165,6 +165,7 @@ class AttendanceSession {
   - duration: int
   - openTime: time_t
   - capture: AttendanceCapture*
+  - records: vecotor<AttendamceRecord*>
   + close(): void
   + isExpired(): boolean
   + markPresent(s: Student*): void
