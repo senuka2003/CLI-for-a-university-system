@@ -85,6 +85,11 @@ const vector<Course*>& Student::getEnrolledCourses() const {
 
 Timetable Student::viewTimetable() const {
     Timetable combined;
+
+    if (enrolledCourses.empty()) {
+        return combined;
+    }
+    
     std::cout << "\n========================================\n";
     std::cout << " TIMETABLE FOR: " << name << " (" << id << ")\n";
     std::cout << "========================================\n";

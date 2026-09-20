@@ -1,76 +1,112 @@
-@startuml new new
+@startuml
 skinparam classAttributeIconSize 0
 
 ' --- USER MANAGEMENT ---
 abstract class Person {
-  - id: String
-  - name: String
-  - email: String
-  - password: String
+  # id: String
+  # name: String
+  # email: String
+  # password: String
+  + Person(id: String, name: String, email: String, password: String)
+  + virtual ~Person() = default
+  + getId(): String {const}
+  + getName(): String {const}
+  + getEmail(): String {const}
+  + checkPassword(pwd: String): boolean {const}
+  + setPassword(pwd: String): void
+  + setName(name: String): void
+  + setEmail(email: String): void
   + {abstract} displayMenu(): void
-  + getRole(): String
+  + {abstract} getRole(): String {const}
 }
+
 class Student {
+  - completedCourses: List<String>
   - enrolledCourses: List<Course*>
-  + enrol(course: Course&): void 
-  + drop(course: Course&): void 
-  + viewTimetable(): Timetable
+  + enrolCourse(course: Course*): void
+  + dropCourse(course: Course*): void
+  + viewTimetable(): Timetable {const}
+  + getEnrolledCourses(): List<Course*> {const}
+  + hasCompleted(courseCode: String): boolean {const}
   + displayMenu(): void
-  + friend operator<<(os, s: Student&): ostream&
+  + getRole(): String {const}
+  + friend operator<<(os: ostream&, s: const Student&): ostream&
 }
+
 class Lecturer {
+  - assignedCourses: List<Course*>
   + displayMenu(): void
-  + viewEnrolmentList(courseCode: String): void
-  + openAttendanceSession(courseCode: String, slot: TimeSlot, duration: int): AttendanceSession
+  + getRole(): String {const}
+  + viewEnrolmentList(course: Course*): void
+  + openAttendanceSession(course: Course*, slot: const TimeSlot&, duration: int): AttendanceSession*
 }
+
 class Admin {
   + displayMenu(): void
-  + createUsers(): void
-  + removeUsers(): void
-  + manageUsers(): void
-  + createCourses(): void
-  + removeCourses(): void
-  + manageCourses(): void
-  + generateReport(): void
+  + getRole(): String {const}
+  + manageUsers(students: List<Student*>&, lecturers: List<Lecturer*>&, admins: List<Admin*>&): void
+  + manageCourses(allCourses: List<Course*>&, lecturers: List<Lecturer*>&): void
+  + generateReport(allCourses: List<Course*>&): void
 }
+
 Person <|-- Student : Inheritance
 Person <|-- Lecturer : Inheritance
 Person <|-- Admin : Inheritance
 
 ' --- COURSE MANAGEMENT ---
 abstract class Course {
-  - code: String
-  - title: String
-  - capacity: int
-  - prerequisites: List<Course*>
-  - {static} totalCourseCount: int
-  + {abstract} getCredits(): int
-  + {abstract} calculateGrade(): void
-  + checkPrerequisites(student: Student*): boolean
-  + {static} getTotalCourseCount(): int
-  + friend operator<<(os, c: Course&): ostream&
-  + getAttendancePercentage(s: Student*): double
-  + getCourseAttendancePercentage(): double
+  # code: String
+  # title: String
+  # capacity: int
+  # lecturer: Lecturer*
+  # prerequisites: List<Course*>
+  # enrolledStudents: List<Student*>
+  # timetable: Timetable
+  + Course(code: String, title: String, cap: int, lec: Lecturer*)
+  + virtual ~Course()
+  + Course(const Course& other)
+  + Course(Course&& other) noexcept
+  + operator=(const Course& other): Course&
+  + operator=(Course&& other) noexcept: Course&
+  + getCode(): String {const}
+  + getTitle(): String {const}
+  + getCapacity(): int {const}
+  + setTitle(newTitle: String): void
+  + setCapacity(newCapacity: int): void
+  + getLecturer(): Lecturer* {const}
+  + getTimetable(): Timetable&
+  + isFull(): boolean {const}
+  + addPrerequisite(c: Course*): void
+  + getPrerequisites(): List<Course*>& {const}
+  + addEnrolledStudent(s: Student*): void
+  + removeEnrolledStudent(s: Student*): void
+  + getEnrolledStudents(): List<Student*>& {const}
+  + {abstract} getCredits(): int {const}
+  + {abstract} calculateGrade(rawScore: double): double {const}
+  + friend operator<<(os: ostream&, c: const Course&): ostream&
 }
 
 class LectureCourse {
-  + getCredits(): int
-  + calculateGrade(): void
+  + getCredits(): int {const}
+  + calculateGrade(rawScore: double): double {const}
 }
+
 class LabCourse {
-  + getCredits(): int
-  + calculateGrade(): void
+  + getCredits(): int {const}
+  + calculateGrade(rawScore: double): double {const}
 }
+
 class ProjectCourse {
-  + getCredits(): int
-  + calculateGrade(): void
+  + getCredits(): int {const}
+  + calculateGrade(rawScore: double): double {const}
 }
+
 Course <|-- LectureCourse
 Course <|-- LabCourse
 Course <|-- ProjectCourse
 
-Course "0..*" o-- "0..*" Student : Aggregation (Enrolment)
-Lecturer "1" o-- "0..*" Course : teaches >
+Student "0..*" o-- "0..*" Course : Enrolment
+Lecturer "1" o-- "0..*" Course : Teaches >
 
 ' --- TIMETABLE & CLASH DETECTION ---
 class TimeSlot {
@@ -78,123 +114,150 @@ class TimeSlot {
   - startTime: String
   - endTime: String
   - location: String
-  + operator==(other: TimeSlot): boolean
-  + friend operator<<(os, t: TimeSlot&): ostream&
+  + TimeSlot(day: String, start: String, end: String, loc: String)
+  + getDay(): String {const}
+  + getStartTime(): String {const}
+  + getEndTime(): String {const}
+  + getLocation(): String {const}
+  + operator==(const TimeSlot& other): boolean {const}
+  + friend operator<<(os: ostream&, t: const TimeSlot&): ostream&
 }
+
 class Timetable {
   - slots: List<TimeSlot>
   + addSlot(slot: TimeSlot): void
-  + hasClash(other: Timetable): boolean
-  + friend operator<<(os, t: Timetable&): ostream&
+  + removeSlot(index: size_t): void
+  + updateSlot(index: size_t, newSlot: TimeSlot): void
+  + hasClash(newSlot: const TimeSlot&): boolean {const}
+  + getSlots(): List<TimeSlot>&
+  + friend operator<<(os: ostream&, t: const Timetable&): ostream&
 }
-Timetable "1" *-- "1..*" TimeSlot : Composition
+
+Timetable "1" *-- "0..*" TimeSlot : Composition
 Course "1" *-- "1" Timetable : Composition
 
-' --- PERSISTENCE ---
+' --- PERSISTENCE & DTO RECORDS ---
+class UserRecord {
+  + role: String
+  + id: String
+  + name: String
+  + email: String
+  + password: String
+}
+
+class CourseRecord {
+  + type: String
+  + code: String
+  + title: String
+  + capacity: int
+  + lecturerId: String
+  + prerequisites: String
+}
+
+class EnrolmentRecord {
+  + studentId: String
+  + courseCode: String
+}
+
+class LogEntry {
+  + timestamp: String
+  + level: String
+  + message: String
+  + serialize(): String {const}
+  + {static} deserialize(line: String): LogEntry
+}
+
 class "Repository<T>" as Repository {
   + loadFromFile(filename: String): List<T>
   + saveToFile(filename: String, data: List<T>): void
 }
-Student ..> Repository : persisted via >
-Course ..> Repository : persisted via >
-AttendanceSession ..> Repository : persisted via >
+
+Repository ..> UserRecord : serializes >
+Repository ..> CourseRecord : serializes >
+Repository ..> EnrolmentRecord : serializes >
+Repository ..> LogEntry : serializes >
+
 ' --- EXCEPTIONS ---
-abstract class DomainException {
+class "std::exception" as StdException
+
+class DomainException {
   # message: String
-  + explicit DomainException(msg: String)
+  + DomainException(msg: String)
   + what(): const char* {override}
 }
-abstract class EnrolmentException
-abstract class AttendanceException
+
+StdException <|-- DomainException
+
+class DuplicateEnrolmentException
+class PrerequisiteNotMetException
+class CourseFullException
 class TimetableClashException
+class SessionClosedException
+class UnauthorizedAccessException
+class NotEnrolledException
+class DuplicateAttendanceException
+class DataCorruptionException
 
- class DataCorruptionException {
-  + DataCorruptionException(filename: String, reason: String)
-}
-
-class UnauthorizedAccessException {
-  + UnauthorizedAccessException(msg: String)
-}
-
-class PrerequisiteNotMetException {
-  + PrerequisiteNotMetException(courseCode: String)
-}
-class CourseFullException {
-  + CourseFullException(courseCode: String)
-}
-class SessionClosedException {
-  + SessionClosedException(sessionId: String)
-}
-class NotEnrolledException {
-  + NotEnrolledException(studentId: String, courseCode: String)
-}
-class DuplicateAttendanceException {
-  + DuplicateAttendanceException(studentId: String, sessionId: String)
-}
-
-std.exception <|-- DomainException
-DomainException <|-- EnrolmentException
-DomainException <|-- AttendanceException
+DomainException <|-- DuplicateEnrolmentException
+DomainException <|-- PrerequisiteNotMetException
+DomainException <|-- CourseFullException
 DomainException <|-- TimetableClashException
-DomainException <|-- DataCorruptionException
+DomainException <|-- SessionClosedException
 DomainException <|-- UnauthorizedAccessException
-EnrolmentException <|-- PrerequisiteNotMetException
-EnrolmentException <|-- CourseFullException
-AttendanceException <|-- SessionClosedException
-AttendanceException <|-- NotEnrolledException
-AttendanceException <|-- DuplicateAttendanceException
+DomainException <|-- NotEnrolledException
+DomainException <|-- DuplicateAttendanceException
+DomainException <|-- DataCorruptionException
 
 ' --- ATTENDANCE SYSTEM ---
 class AttendanceRecord {
-  - student: Student*
-  - session: AttendanceSession*
+  - studentId: String
+  - courseCode: String
+  - sessionId: String
   - timestamp: String
   - status: String
-  - capturedVia: String
+  - captureMethod: String
   - isCorrection: boolean
-  - actingLecturer: Lecturer*
+  - lecturerId: String
   - reason: String
-  + AttendanceRecord(student: Student*, session: AttendanceSession*, status: String, capturedVia: String)
-  + getStudent(): Student*
+  + AttendanceRecord(...)
+  + getStudentId(): String {const}
   + getStatus(): String {const}
 }
+
 class AttendanceSession {
   - sessionId: String
   - courseCode: String
-  - isOpen: boolean
-  - duration: int
+  - durationMinutes: int
   - openTime: time_t
-  - capture: AttendanceCapture*
-  - records: vecotor<AttendamceRecord*>
+  - isOpen: boolean
+  - records: List<AttendanceRecord*>
+  + AttendanceSession(id: String, course: String, dur: int)
+  + markPresent(s: Student*, c: Course*, method: String): void
+  + addCorrection(s: Student*, status: String, l: Lecturer*, reason: String): void
   + close(): void
-  + isExpired(): boolean
-  + markPresent(s: Student*): void
-  + setCaptureMechanism(c: AttendanceCapture*): void
+  + isExpired(): boolean {const}
 }
+
 interface AttendanceCapture {
-  + {abstract} beginSession(): void
-  + {abstract} captureNext(): String
-  + {abstract} endSession(): void
+  + {abstract} captureAttendance(s: Student*, c: Course*): boolean
 }
-class FileReplayCapture {
-  - inputFile: String
-  + beginSession(): void
-  + captureNext(): String
-  + endSession(): void
-}
+
 class RotatingCodeCapture {
-  - currentCode: String
-  + beginSession(): void
-  + captureNext(): String
-  + endSession(): void
+  - currentPasscode: String
+  - expiryTime: time_t
+  + generateNewCode(): String
+  + verifyCode(input: String): boolean
+  + captureAttendance(s: Student*, c: Course*): boolean
 }
-AttendanceCapture <|.. FileReplayCapture : Realizes
+
+class FileReplayCapture {
+  - replayFilePath: String
+  + processReplay(session: AttendanceSession*): void
+  + captureAttendance(s: Student*, c: Course*): boolean
+}
+
 AttendanceCapture <|.. RotatingCodeCapture : Realizes
+AttendanceCapture <|.. FileReplayCapture : Realizes
 AttendanceSession ..> AttendanceCapture : uses >
-
 AttendanceSession "1" *-- "0..*" AttendanceRecord : Composition
-AttendanceRecord "0..*" --> "1" Student : Refers to
-AttendanceRecord "0..*" --> "1" Lecturer : records correction
-Course "1" *-- "0..*" AttendanceSession : Composition
-
 @enduml
