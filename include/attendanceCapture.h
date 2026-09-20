@@ -6,6 +6,7 @@
 class AttendanceCapture {
 public:
     virtual ~AttendanceCapture() = default;
+
     virtual void beginSession() = 0;
     virtual std::string captureNext() = 0;
     virtual void endSession() = 0;

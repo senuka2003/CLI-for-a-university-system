@@ -17,12 +17,21 @@ void Lecturer::displayMenu() const {
 string Lecturer::getRole() const { return "Lecturer"; }
 
 void Lecturer::viewEnrolmentList(Course* course) const {
-    // ownership check - "their own courses only".
-    if (course->getLecturer() != this) {
-        throw UnauthorizedAccessException("not your course: " + course->getCode());
+    if (!course) return;
+
+    if (!course->getLecturer() || course->getLecturer()->getId() != this->getId()) {
+        throw DomainException("Access denied: not your course: " + course->getCode());
     }
-    for (Student* s : course->getEnrolledStudents()) {
-        cout << *s << "\n"; // reuses Student::operator<<
+
+    std::cout << "\nEnrolled students in " << course->getCode() << ":\n";
+    const auto& enrolled = course->getEnrolledStudents();
+    if (enrolled.empty()) {
+        std::cout << "  (No students currently enrolled in this course)\n";
+        return;
+    }
+
+    for (const auto* s : enrolled) {
+        std::cout << "  - [" << s->getId() << "] " << s->getName() << " (" << s->getEmail() << ")\n";
     }
 }
 

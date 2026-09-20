@@ -2,6 +2,7 @@
 #define COURSE_H
 
 #include "Timetable.h"
+#include "timeSlot.h"
 #include <string>
 #include <vector>
 #include <iostream>
@@ -28,10 +29,16 @@ public:
 
     Course(const Course& other);
     Course& operator=(const Course& other);
+    Course(Course&& other) noexcept;
+    Course& operator=(Course&& other) noexcept;
     virtual ~Course();
 
     virtual int getCredits() const = 0;
     virtual double calculateGrade(double rawScore) const = 0;
+
+    int getCapacity() const { return capacity; }
+    void setTitle(const std::string& newTitle) { title = newTitle; }
+    void setCapacity(int newCapacity) { capacity = newCapacity; }
 
     bool isFull() const;
     void addPrerequisite(Course* c);
@@ -41,8 +48,18 @@ public:
     void removeEnrolledStudent(Student* s);
     const std::vector<Student*>& getEnrolledStudents() const;
 
+    void setLecturer(Lecturer* lec) { this->lecturer = lec; }
+
     void addTimeSlot(const TimeSlot& slot);
-    const Timetable& getTimetable() const;
+    void updateTimeSlot(size_t index, const TimeSlot& newSlot) {
+        timetable.updateSlot(index, newSlot);
+    }
+
+    void removeTimeSlot(size_t index) {
+        timetable.removeSlot(index);
+    }
+    Timetable& getTimetable() { return timetable; }
+    const Timetable& getTimetable() const { return timetable; }
 
     AttendanceSession* openAttendanceSession(const std::string& sessionId, int duration);
     const std::vector<AttendanceSession*>& getSessions() const;

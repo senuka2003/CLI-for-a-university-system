@@ -1,0 +1,9 @@
+Lecture,CO101,Object Oriented Programming,2,COL001,NONE
+Lecture,CS102,Data Communication,4,COL002,NONE
+Lecture,CS103,Computer Organization,2,COL003,NONE
+Lab,COL101,OOP Lab,2,COL001,CO101
+Lab,COL102,Data Com Lab,2,COL002,CS102
+Lab,COL103,Organization Lab,2,COL003,CS103
+Project,COP101,OOP Project,5,COL001,COL101
+Project,COP102,Data Com Project,5,COL002,COL102
+Project,COP103,Organization Project,5,COL003,COL103

@@ -1,6 +1,7 @@
 #ifndef EXCEPTIONS_H
 #define EXCEPTIONS_H
 
+#pragma once
 #include <exception>
 #include <string>
 

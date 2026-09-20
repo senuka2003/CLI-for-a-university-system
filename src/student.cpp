@@ -1,7 +1,9 @@
 #include "Student.h"
 #include "Course.h"
 #include "Exceptions.h"
+#include "repository.h"
 #include <algorithm>
+#include <set>
 
 using namespace std;
 
@@ -19,12 +21,29 @@ bool Student::hasCompleted(Course* target) const {
     return find(enrolledCourses.begin(), enrolledCourses.end(), target) != enrolledCourses.end();
 }
 
-bool Student::prerequisitesSatisfied(Course* course) const {
-    for (Course* prereq : course->getPrerequisites()) {
-        if (!hasCompleted(prereq)) return false;
-        if (!prerequisitesSatisfied(prereq)) return false; // walk the whole chain
+
+bool Student::checkChain(Course* c, std::set<Course*>& visited) const {
+    if (!c) return true;
+
+    if (visited.find(c) != visited.end()) {
+        return true;
+    }
+    visited.insert(c);
+
+    for (Course* prereq : c->getPrerequisites()) {
+        if (!hasCompleted(prereq)) {
+            return false;
+        }
+        if (!checkChain(prereq, visited)) {
+            return false;
+        }
     }
     return true;
+}
+
+bool Student::prerequisitesSatisfied(Course* course) const {
+    std::set<Course*> visited;
+    return checkChain(course, visited);
 }
 
 void Student::enrol(Course& course) {

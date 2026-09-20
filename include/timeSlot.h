@@ -7,21 +7,22 @@
 class TimeSlot {
 private:
     std::string day;
-    int startTime; // minutes since midnight, e.g. 9:00 -> 540
-    int endTime;
+    std::string startTime;
+    std::string endTime;
     std::string location;
 
 public:
-    TimeSlot(std::string day, int startTime, int endTime, std::string location);
+    TimeSlot() = default;
+    TimeSlot(const std::string& d, const std::string& start, const std::string& end, const std::string& loc);
 
     std::string getDay() const;
-    int getStartTime() const;
-    int getEndTime() const;
+    std::string getStartTime() const;
+    std::string getEndTime() const;
     std::string getLocation() const;
 
-bool operator==(const TimeSlot& other) const;
+    bool operator==(const TimeSlot& other) const;
 
-friend std::ostream& operator<<(std::ostream& os, const TimeSlot& slot);
+    friend std::ostream& operator<<(std::ostream& os, const TimeSlot& slot);
 };
 
-#endif // TIMESLOT_H
+#endif

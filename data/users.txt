@@ -1,0 +1,7 @@
+EN001,Senuka,senuka@uni.lk,pw111,Student
+EN002,Piyumi,piyumi@uni.lk,pw111,Student
+EN003,Dilara,dilara@uni.lk,pw111,Student
+COL001,Dr. Udaya,udaya@uni.lk,pass123,Lecturer
+COL002,Dr. Krishanth,krishanth@uni.lk,pass123,Lecturer
+COL003,Dr. Sanka,sanka@uni.lk,pass123,Lecturer
+A001,Administrator,admin@uni.lk,adminpw,Admin

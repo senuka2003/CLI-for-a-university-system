@@ -1,22 +1,30 @@
-#include "TimeSlot.h"
+#include "timeSlot.h"
 
-using namespace std;
+TimeSlot::TimeSlot(const std::string& d, const std::string& start, const std::string& end, const std::string& loc)
+    : day(d), startTime(start), endTime(end), location(loc) {}
 
-TimeSlot::TimeSlot(string day, int startTime, int endTime, string location)
-    : day(move(day)), startTime(startTime), endTime(endTime), location(move(location)) {}
+std::string TimeSlot::getDay() const {
+    return day;
+}
 
-string TimeSlot::getDay() const { return day; }
-int TimeSlot::getStartTime() const { return startTime; }
-int TimeSlot::getEndTime() const { return endTime; }
-string TimeSlot::getLocation() const { return location; }
+std::string TimeSlot::getStartTime() const {
+    return startTime;
+}
+
+std::string TimeSlot::getEndTime() const {
+    return endTime;
+}
+
+std::string TimeSlot::getLocation() const {
+    return location;
+}
 
 bool TimeSlot::operator==(const TimeSlot& other) const {
     if (day != other.day) return false;
-    return (startTime < other.endTime) && (other.startTime < endTime);
+    return (startTime < other.endTime && other.startTime < endTime);
 }
 
-ostream& operator<<(ostream& os, const TimeSlot& slot) {
-    os << slot.day << " " << slot.startTime << "-" << slot.endTime
-       << " @ " << slot.location;
+std::ostream& operator<<(std::ostream& os, const TimeSlot& slot) {
+    os << slot.day << " " << slot.startTime << "-" << slot.endTime << " @ " << slot.location;
     return os;
 }

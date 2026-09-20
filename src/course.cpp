@@ -42,6 +42,47 @@ Course& Course::operator=(const Course& other) {
     return *this;
 }
 
+Course::Course(Course&& other) noexcept
+    : code(std::move(other.code)),
+      title(std::move(other.title)),
+      capacity(other.capacity),
+      lecturer(other.lecturer),
+      timetable(std::move(other.timetable)),
+      prerequisites(std::move(other.prerequisites)),
+      enrolledStudents(std::move(other.enrolledStudents)),
+      sessions(std::move(other.sessions)) {
+    
+    other.capacity = 0;
+    other.lecturer = nullptr;
+    other.sessions.clear();
+    ++totalCourseCount;
+}
+
+Course& Course::operator=(Course&& other) noexcept {
+    if (this == &other) return *this;
+
+    for (AttendanceSession* s : sessions) {
+        delete s;
+    }
+    sessions.clear();
+
+    code = std::move(other.code);
+    title = std::move(other.title);
+    capacity = other.capacity;
+    lecturer = other.lecturer;
+    timetable = std::move(other.timetable);
+    prerequisites = std::move(other.prerequisites);
+    enrolledStudents = std::move(other.enrolledStudents);
+    sessions = std::move(other.sessions);
+
+    other.capacity = 0;
+    other.lecturer = nullptr;
+    other.sessions.clear();
+
+    return *this;
+
+}
+
 Course::~Course() {
     for (AttendanceSession* s : sessions) delete s;
     --totalCourseCount;
@@ -64,7 +105,6 @@ void Course::removeEnrolledStudent(Student* s) {
 const vector<Student*>& Course::getEnrolledStudents() const { return enrolledStudents; }
 
 void Course::addTimeSlot(const TimeSlot& slot) { timetable.addSlot(slot); }
-const Timetable& Course::getTimetable() const { return timetable; }
 
 AttendanceSession* Course::openAttendanceSession(const string& sessionId, int duration) {
     AttendanceSession* session = new AttendanceSession(sessionId, code, duration);

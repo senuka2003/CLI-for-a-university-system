@@ -1,10 +1,14 @@
 #ifndef STUDENT_H
 #define STUDENT_H
 
+#include "repository.h"
+#include "exceptions.h"
 #include "Person.h"
 #include "Timetable.h"
 #include <vector>
 #include <iostream>
+#include <set>
+#include <string>
 
 class Course;
 
@@ -12,6 +16,7 @@ class Student : public Person {
 private:
     std::vector<Course*> enrolledCourses;
 
+    bool checkChain(Course* c, std::set<Course*>& visited) const;
     bool hasCompleted(Course* target) const;
     bool prerequisitesSatisfied(Course* course) const;
 
