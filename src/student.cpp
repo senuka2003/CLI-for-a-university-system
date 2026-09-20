@@ -47,6 +47,12 @@ bool Student::prerequisitesSatisfied(Course* course) const {
 }
 
 void Student::enrol(Course& course) {
+    for (Course* c : enrolledCourses) {
+        if (c->getCode() == course.getCode()) {
+            throw DomainException("Student (" + id + ") is already enrolled in course " + course.getCode());
+        }
+    }
+    
     if (course.isFull()) {
         throw CourseFullException(course.getCode());
     }
@@ -79,11 +85,31 @@ const vector<Course*>& Student::getEnrolledCourses() const {
 
 Timetable Student::viewTimetable() const {
     Timetable combined;
+    std::cout << "\n========================================\n";
+    std::cout << " TIMETABLE FOR: " << name << " (" << id << ")\n";
+    std::cout << "========================================\n";
+
+    if (enrolledCourses.empty()) {
+        std::cout << ">> You are not enrolled in any courses.\n";
+        return combined;
+    }
+
+    bool hasSlots = false;
     for (Course* c : enrolledCourses) {
         for (const TimeSlot& slot : c->getTimetable().getSlots()) {
             combined.addSlot(slot);
+            std::cout << "Course: " << c->getCode() 
+                      << " | Day: " << slot.getDay() 
+                      << " | Time: " << slot.getStartTime() << " - " << slot.getEndTime() << "\n";
+            hasSlots = true;
         }
     }
+
+    if (!hasSlots) {
+        std::cout << ">> No scheduled timetable slots found for your enrolled courses.\n";
+    }
+    std::cout << "========================================\n";
+
     return combined;
 }
 

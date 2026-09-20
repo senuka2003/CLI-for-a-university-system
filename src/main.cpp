@@ -7,6 +7,7 @@
 #include "attendanceSession.h"
 #include "attendanceCapture.h"
 #include "rotatingCodeCapture.h"
+#include "fileReplayCapture.h"
 #include "repository.h"
 #include "logEntry.h"
 #include "exceptions.h"
@@ -440,16 +441,22 @@ void viewStudentAttendanceReport(Student* student, const vector<Course*>& allCou
 }
 
 // --- Interactive Menus ---
-void handleStudentSession(Student* student, const vector<Course*>& allCourses, const vector<Student*>& students) {
+void handleStudentSession(Student* student, const vector<Course*>& allCourses, const vector<Student*>& allStudents) {
+    (void)allStudents;
     while (true) {
         cout << "\n----------------------------------------\n";
         cout << " Logged in as Student: " << student->getName() << " (" << student->getId() << ")\n";
         cout << "----------------------------------------\n";
 
-        student->displayMenu();
-        cout << "5. View My Attendance Status \n";
+        cout << "--- Student Menu ---\n";
+        cout << "1. Enrol in course\n";
+        cout << "2. Drop course\n";
+        cout << "3. View timetable\n";
+        cout << "4. Mark Attendance (Rotating Code)\n";
+        cout << "5. View My Attendance Status\n";
         cout << "6. Logout\n";
         cout << "Enter choice: ";
+
         int choice;
         if (!(cin >> choice)) {
             cin.clear();
@@ -458,49 +465,89 @@ void handleStudentSession(Student* student, const vector<Course*>& allCourses, c
         }
 
         if (choice == 1) {
-            cout << "Enter Course Code: ";
+            cout << "\n--- Available Courses to Enrol ---\n";
+            for (Course* c : allCourses) {
+                bool alreadyEnrolled = false;
+                for (Course* enrolled : student->getEnrolledCourses()) {
+                    if (enrolled->getCode() == c->getCode()) {
+                        alreadyEnrolled = true;
+                        break;
+                    }
+                }
+                cout << " - " << c->getCode() << " : " << c->getTitle() 
+                     << (alreadyEnrolled ? " [Already Enrolled]" : "") << "\n";
+            }
+            cout << "----------------------------------\n";
+
+            cout << "Enter Course Code to enrol: ";
             string code;
             cin >> code;
+
             Course* target = findCourseByCode(allCourses, code);
             if (!target) {
                 cout << ">> Error: Course not found!\n";
             } else {
                 try {
-                    // target pointer eka dereference kara (*target)
                     student->enrol(*target);
-                    cout << ">> Successfully enrolled in " << target->getTitle() << "!\n";
-                    // students vector eka pass kara
-                    syncEnrolmentsToFile(students);
+                    cout << ">> [SUCCESS] Successfully enrolled in " << target->getCode() << " (" << target->getTitle() << ")!\n";
+
+                    ofstream logFile("data/attendance_events.txt", ios::app);
+                    if (logFile.is_open()) {
+                        time_t now = time(nullptr);
+                        logFile << "ENROL," << student->getId() << "," << target->getCode() << "," << now << "\n";
+                        logFile.close();
+                    }
                 } catch (const DomainException& e) {
-                    cout << ">> Enrolment Error: " << e.what() << "\n";
+                    cout << ">> Enrolment Failed: " << e.what() << "\n";
                 }
             }
             pauseConsole();
-        } 
+        }
         else if (choice == 2) {
-            cout << "Enter Course Code: ";
+            cout << "\n--- Your Enrolled Courses ---\n";
+            const auto& myCourses = student->getEnrolledCourses();
+            if (myCourses.empty()) {
+                cout << ">> You are not enrolled in any courses.\n";
+            } else {
+                for (Course* c : myCourses) {
+                    cout << " - " << c->getCode() << " : " << c->getTitle() << "\n";
+                }
+            }
+            cout << "-----------------------------\n";
+
+            if (myCourses.empty()) {
+                pauseConsole();
+                continue;
+            }
+
+            cout << "Enter Course Code to drop: ";
             string code;
             cin >> code;
+
             Course* target = findCourseByCode(allCourses, code);
             if (!target) {
                 cout << ">> Error: Course not found!\n";
             } else {
                 try {
-                    // target pointer eka dereference kara (*target)
                     student->drop(*target);
-                    cout << ">> Successfully dropped from " << target->getTitle() << "!\n";
-                    // students vector eka pass kara
-                    syncEnrolmentsToFile(students);
+                    cout << ">> [SUCCESS] Successfully dropped " << target->getCode() << "!\n";
+
+                    ofstream logFile("data/attendance_events.txt", ios::app);
+                    if (logFile.is_open()) {
+                        time_t now = time(nullptr);
+                        logFile << "DROP," << student->getId() << "," << target->getCode() << "," << now << "\n";
+                        logFile.close();
+                    }
                 } catch (const DomainException& e) {
-                    cout << ">> Drop Error: " << e.what() << "\n";
+                    cout << ">> Drop Failed: " << e.what() << "\n";
                 }
             }
             pauseConsole();
-        } 
+        }
         else if (choice == 3) {
             student->viewTimetable();
             pauseConsole();
-        } 
+        }
         else if (choice == 4) {
             cout << "Enter Course Code: ";
             string code;
@@ -510,91 +557,106 @@ void handleStudentSession(Student* student, const vector<Course*>& allCourses, c
             if (!target) {
                 cout << ">> Error: Course not found!\n";
             } else {
-                cout << "Enter Active Session ID: ";
-                string sessionId;
-                cin >> sessionId;
-
-                AttendanceSession* targetSession = nullptr;
-                for (AttendanceSession* s : allActiveSessions) {
-                    if (s->getSessionId() == sessionId && s->getCourseCode() == target->getCode()) {
-                        targetSession = s;
+                bool isEnrolled = false;
+                for (Course* c : student->getEnrolledCourses()) {
+                    if (c->getCode() == target->getCode()) {
+                        isEnrolled = true;
                         break;
                     }
                 }
 
-                if (!targetSession) {
-                    cout << ">> Error: Active session with ID " << sessionId << " not found!\n";
+                if (!isEnrolled) {
+                    cout << ">> Error: You are not enrolled in this course!\n";
                 } else {
-                    try {
-                        targetSession->markPresent(student, target, "CONSOLE");
-                        cout << ">> [SUCCESS] Attendance marked successfully for " << student->getName() << "!\n";
-
-                        // Log event
-                        ofstream logFile("data/attendance_events.txt", ios::app);
-                        if (logFile.is_open()) {
-                            time_t now = time(nullptr);
-                            logFile << "ATTENDANCE_MARKED," 
-                                    << student->getId() << "," 
-                                    << target->getCode() << "," 
-                                    << sessionId << ",present,CONSOLE," 
-                                    << now << "\n";
-                            logFile.close();
+                    AttendanceSession* activeSess = nullptr;
+                    for (auto it = allActiveSessions.begin(); it != allActiveSessions.end(); ++it) {
+                        if ((*it)->getCourseCode() == target->getCode() && (*it)->isOpen() && !(*it)->isExpired()) {
+                            activeSess = *it;
+                            break;
                         }
-                    } catch (const DomainException& e) {
-                        cout << ">> [FAILED] Attendance Error: " << e.what() << "\n";
+                    }
+
+                    if (!activeSess) {
+                        cout << ">> Error: No active attendance session currently open for this course!\n";
+                    } else {
+                        cout << ">> Active session detected: " << activeSess->getSessionId() << "\n";
+                        cout << "Enter Active Rotating Code: ";
+                        string inputCode;
+                        cin >> inputCode;
+
+                        RotatingCodeCapture rcc;
+                        string currentValidCode = rcc.getCurrentCode();
+
+                        if (!currentValidCode.empty() && inputCode == currentValidCode) {
+                            try {
+                                activeSess->markPresent(student, target, "RotatingCode");
+                                cout << ">> [SUCCESS] Attendance marked successfully as PRESENT for Session " 
+                                     << activeSess->getSessionId() << "!\n";
+
+                                ofstream logFile("data/attendance_events.txt", ios::app);
+                                if (logFile.is_open()) {
+                                    time_t now = time(nullptr);
+                                    logFile << "ATTENDANCE_MARKED," << student->getId() << "," 
+                                            << target->getCode() << "," << activeSess->getSessionId() 
+                                            << ",present," << now << "\n";
+                                    logFile.close();
+                                }
+                            } catch (const DomainException& e) {
+                                cout << ">> Attendance Error: " << e.what() << "\n";
+                            }
+                        } else {
+                            cout << ">> [FAILED] Invalid or expired Rotating Code! Attendance was not recorded.\n";
+                        }
                     }
                 }
             }
             pauseConsole();
-        } 
+        }
         else if (choice == 5) {
-            viewStudentAttendanceReport(student, allCourses);
+            cout << "\n--- Your Attendance Summary ---\n";
+            for (Course* c : student->getEnrolledCourses()) {
+                int totalHeld = 0;
+                int attended = 0;
+
+                for (AttendanceSession* sess : allSessions) {
+                    if (sess->getCourseCode() == c->getCode()) {
+                        totalHeld++;
+                        for (const auto& rec : sess->getRecords()) {
+                            if (rec.getStudent()->getId() == student->getId() && 
+                               (rec.getStatus() == "present" || rec.getStatus() == "late")) {
+                                attended++;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                double pct = (totalHeld == 0) ? 0.0 : (static_cast<double>(attended) / totalHeld) * 100.0;
+                cout << "Course: " << c->getCode() << " | Attended: " << attended << "/" << totalHeld 
+                     << " (" << pct << "%) | Status: " << (pct >= 80.0 ? "Eligible" : "At Risk / Ineligible") << "\n";
+            }
             pauseConsole();
-        } 
+        }
         else if (choice == 6) {
             break;
         }
     }
 }
 
-void handleLecturerSession(Lecturer* lecturer, const vector<Course*>& allCourses) {
+void handleLecturerSession(Lecturer* lecturer, const vector<Course*>& allCourses, const vector<Student*>& allStudents) {
     while (true) {
         cout << "\n----------------------------------------\n";
         cout << " Logged in as Lecturer: " << lecturer->getName() << " (" << lecturer->getId() << ")\n";
         cout << "----------------------------------------\n";
 
-        // Check active and auto-expired sessions
-        if (!allActiveSessions.empty()) {
-            cout << "\n--- Active Attendance Sessions ---\n";
-            for (auto it = allActiveSessions.begin(); it != allActiveSessions.end(); ) {
-                if ((*it)->isExpired()) {
-                    cout << "[!] Notice: Session " << (*it)->getSessionId() 
-                         << " (" << (*it)->getCourseCode() << ") has automatically EXPIRED!\n";
-
-                    ofstream logFile("data/attendance_events.txt", ios::app);
-                    if (logFile.is_open()) {
-                        time_t now = time(nullptr);
-                        logFile << "SESSION_EXPIRED," << (*it)->getCourseCode() << "," 
-                                << (*it)->getSessionId() << "," << lecturer->getId() << "," 
-                                << now << "\n";
-                        logFile.close();
-                    }
-
-                    it = allActiveSessions.erase(it);
-                } else {
-                    cout << "[i] Active: Session " << (*it)->getSessionId() 
-                         << " (" << (*it)->getCourseCode() << ") is currently RUNNING.\n";
-                    ++it;
-                }
-            }
-            cout << "----------------------------------\n\n";
-        }
-
-        lecturer->displayMenu();
-        cout << "3. Correct Attendance Record\n";
-        cout << "4. View Attendance & Eligibility Report\n";
+        cout << "--- Lecturer Menu ---\n";
+        cout << "1. Open new attendance session\n";
+        cout << "2. View / Manage active session\n";
+        cout << "3. Manual attendance correction\n";
+        cout << "4. View course attendance report\n";
         cout << "5. Logout\n";
         cout << "Enter choice: ";
+
         int choice;
         if (!(cin >> choice)) {
             cin.clear();
@@ -603,213 +665,238 @@ void handleLecturerSession(Lecturer* lecturer, const vector<Course*>& allCourses
         }
 
         if (choice == 1) {
-            cout << "Enter Course Code to view enrolled students: ";
-            string code;
-            cin >> code;
-            Course* target = findCourseByCode(allCourses, code);
+            cout << "Enter Course Code: ";
+            string ccode;
+            cin >> ccode;
+
+            Course* target = findCourseByCode(allCourses, ccode);
             if (!target) {
-                cout << "Course not found!\n";
+                cout << ">> Error: Course not found!\n";
             } else {
-                try {
-                    lecturer->viewEnrolmentList(target);
-                } catch (const DomainException& e) {
-                    cout << ">> Access Error: " << e.what() << "\n";
+                cout << "Enter session duration in seconds (e.g. 600): ";
+                int dur;
+                cin >> dur;
+
+                string sessId = ccode + "-S" + to_string(allSessions.size() + 1);
+                AttendanceSession* newSess = new AttendanceSession(sessId, ccode, dur);
+                allSessions.push_back(newSess);
+                allActiveSessions.push_back(newSess);
+
+                ofstream logFile("data/attendance_events.txt", ios::app);
+                if (logFile.is_open()) {
+                    time_t now = time(nullptr);
+                    logFile << "SESSION_OPENED," << sessId << "," << ccode << "," << dur << "," << now << "\n";
+                    logFile.close();
                 }
+
+                cout << ">> [SUCCESS] Attendance session opened successfully: " << sessId << "\n";
             }
             pauseConsole();
         }
         else if (choice == 2) {
-            cout << "Enter Course Code to open attendance session: ";
-            string code;
-            cin >> code;
+            cout << "Enter Course Code for active session: ";
+            string ccode;
+            cin >> ccode;
 
-            Course* target = findCourseByCode(allCourses, code);
-            if (!target) {
-                cout << "Course not found!\n";
+            AttendanceSession* s = nullptr;
+            for (AttendanceSession* sess : allActiveSessions) {
+                if (sess->getCourseCode() == ccode && sess->isOpen() && !sess->isExpired()) {
+                    s = sess;
+                    break;
+                }
+            }
+
+            if (!s) {
+                cout << ">> No active open session found for course " << ccode << "\n";
             } else {
-                try {
-                    if (target->getTimetable().getSlots().empty()) {
-                        cout << "This course has no assigned time slots!\n";
-                    } else {
-                        int duration = 10;
-                        cout << "Enter session duration in minutes (e.g., 10): ";
-                        if (!(cin >> duration) || duration <= 0) {
-                            cin.clear();
-                            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                            duration = 10;
-                        }
+                Course* target = findCourseByCode(allCourses, ccode);
+                while (true) {
+                    cout << "\n--- Active Session Menu (" << s->getSessionId() << ") ---\n";
+                    cout << "1. Check session status\n";
+                    cout << "2. Close session manually\n";
+                    cout << "3. Generate / View Active Rotating Code\n";
+                    cout << "4. Replay Attendance from File (FileReplayCapture)\n";
+                    cout << "5. Return to Lecturer Menu (Keep session running)\n";
+                    cout << "Enter choice: ";
 
-                        // Open session and track in both lists
-                        AttendanceSession* s = lecturer->openAttendanceSession(target, target->getTimetable().getSlots()[0], duration);
-                        allActiveSessions.push_back(s);
-                        allSessions.push_back(s);
-
-                        cout << ">> Session opened successfully!\n";
-                        cout << ">> Session ID: " << s->getSessionId() << " (Duration: " << duration << " mins)\n";
-
-                        ofstream logFile("data/attendance_events.txt", ios::app);
-                        if (logFile.is_open()) {
-                            time_t now = time(nullptr);
-                            logFile << "SESSION_OPEN," << target->getCode() << "," 
-                                    << s->getSessionId() << "," << lecturer->getId() << "," 
-                                    << duration << "," << now << "\n";
-                            logFile.close();
-                        }
-
-                        int sessionChoice = 0;
-                        while (true) {
-                            if (s->isExpired()) {
-                                cout << "\n[!] Notice: Session duration elapsed. Session has automatically EXPIRED!\n";
-                                break;
-                            }
-
-                            cout << "\n--- Active Session Menu (" << s->getSessionId() << ") ---\n";
-                            cout << "1. Check session status\n";
-                            cout << "2. Close session manually\n";
-                            cout << "3. Replay Attendance from File \n";
-                            cout << "4. Return to Lecturer Menu (Keep session running in background)\n";
-                            cout << "Enter choice: ";
-                            if (!(cin >> sessionChoice)) {
-                                cin.clear();
-                                cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                                continue;
-                            }
-
-                            if (sessionChoice == 1) {
-                                if (s->isOpen()) {
-                                    cout << ">> Session " << s->getSessionId() << " is currently ACTIVE.\n";
-                                } else {
-                                    cout << ">> Session " << s->getSessionId() << " is CLOSED / EXPIRED.\n";
-                                    break;
-                                }
-                            } else if (sessionChoice == 2) {
-                                s->close();
-                                cout << ">> Session closed manually by Lecturer.\n";
-
-                                ofstream closeLog("data/attendance_events.txt", ios::app);
-                                if (closeLog.is_open()) {
-                                    time_t now = time(nullptr);
-                                    closeLog << "SESSION_MANUAL_CLOSED," << target->getCode() << "," 
-                                             << s->getSessionId() << "," << lecturer->getId() << "," 
-                                             << now << "\n";
-                                    closeLog.close();
-                                }
-                                break;
-                            } else if (sessionChoice == 3) {
-                                // Pass Concrete object via Abstract Pointer
-                                cout << "Enter file path (e.g., data/replay_attendance.txt): ";
-                                string replayPath;
-                                cin >> replayPath;
-
-                                AttendanceCapture* captureEngine = new RotatingCodeCapture();
-                                captureEngine->beginSession();
-                                cout << ">> [ROTATING CODE] Active Code: " << captureEngine->captureNext() << "\n";
-                                captureEngine->endSession();
-                                delete captureEngine;
-                            } else if (sessionChoice == 4) {
-                                cout << ">> Returning to main menu. Session will keep running in background.\n";
-                                break;
-                            }
-                        }
+                    int sessionChoice;
+                    if (!(cin >> sessionChoice)) {
+                        cin.clear();
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        continue;
                     }
-                } catch (const DomainException& e) {
-                    cout << ">> Error: " << e.what() << "\n";
+
+                    if (sessionChoice == 1) {
+                        cout << ">> Session Status: " << (s->isOpen() ? "ACTIVE" : "CLOSED / EXPIRED") << "\n";
+                    } else if (sessionChoice == 2) {
+                        s->close();
+                        cout << ">> Session closed manually by Lecturer.\n";
+                        break;
+                    } else if (sessionChoice == 3) {
+                        AttendanceCapture* captureEngine = new RotatingCodeCapture();
+                        captureEngine->beginSession();
+                        string currentCode = captureEngine->captureNext();
+                        cout << "\n==================================================\n";
+                        cout << ">> CURRENT ACTIVE ROTATING CODE: [" << currentCode << "]\n";
+                        cout << ">> (Valid for 10 minutes - Share this with students)\n";
+                        cout << "==================================================\n\n";
+                        delete captureEngine;
+                    } else if (sessionChoice == 4) {
+                        try {
+                            AttendanceCapture* fileEngine = new FileReplayCapture("data/attendance_replay.txt");
+                            fileEngine->beginSession();
+                            cout << ">> Starting bulk attendance replay from file...\n";
+
+                            string line;
+                            int count = 0;
+                            while (!(line = fileEngine->captureNext()).empty()) {
+                                string sId = line;
+                                string status = "present";
+                                size_t commaPos = line.find(',');
+                                if (commaPos != string::npos) {
+                                    sId = line.substr(0, commaPos);
+                                    status = line.substr(commaPos + 1);
+                                }
+
+                                Student* stTarget = nullptr;
+                                for (Student* st : allStudents) {
+                                    if (st->getId() == sId) {
+                                        stTarget = st;
+                                        break;
+                                    }
+                                }
+
+                                if (stTarget && target) {
+                                    s->markPresent(stTarget, target, "FileReplay");
+                                    cout << "   [OK] Marked " << status << " for: " << stTarget->getName() << " (" << sId << ")\n";
+                                    count++;
+                                } else {
+                                    cout << "   [SKIP] Student ID not found: " << sId << "\n";
+                                }
+                            }
+                            fileEngine->endSession();
+                            delete fileEngine;
+                            cout << ">> [SUCCESS] Replayed and marked attendance for " << count << " students!\n";
+                        } catch (const DomainException& e) {
+                            cout << ">> Replay Error / Malformed Line: " << e.what() << "\n";
+                        }
+                    } else if (sessionChoice == 5) {
+                        cout << ">> Returning to main menu. Session running in background.\n";
+                        break;
+                    }
                 }
             }
             pauseConsole();
         }
-        else if (choice == 3) { // Attendance Correction
+        else if (choice == 3) {
             cout << "Enter Course Code: ";
-            string code;
-            cin >> code;
+            string ccode;
+            cin >> ccode;
 
-            Course* target = findCourseByCode(allCourses, code);
-            if (!target) {
-                cout << ">> Error: Course not found!\n";
+            cout << "Enter Session ID: ";
+            string sessId;
+            cin >> sessId;
+
+            AttendanceSession* s = nullptr;
+            for (AttendanceSession* sess : allSessions) {
+                if (sess->getSessionId() == sessId && sess->getCourseCode() == ccode) {
+                    s = sess;
+                    break;
+                }
+            }
+
+            if (!s) {
+                cout << ">> Session not found!\n";
             } else {
-                cout << "Enter Session ID to correct: ";
-                string sessionId;
-                cin >> sessionId;
+                cout << "Enter Student ID: ";
+                string sId;
+                cin >> sId;
 
-                AttendanceSession* targetSession = nullptr;
-                for (AttendanceSession* s : allSessions) {
-                    if (s->getSessionId() == sessionId && s->getCourseCode() == target->getCode()) {
-                        targetSession = s;
+                Student* st = nullptr;
+                for (Student* stud : allStudents) {
+                    if (stud->getId() == sId) {
+                        st = stud;
                         break;
                     }
                 }
 
-                if (!targetSession) {
-                    cout << ">> Error: Session not found in sessions list!\n";
+                if (!st) {
+                    cout << ">> Student not found!\n";
                 } else {
-                    cout << "Enter Student ID: ";
-                    string studentId;
-                    cin >> studentId;
+                    cout << "Enter new status (present/late/absent): ";
+                    string newStatus;
+                    cin >> newStatus;
 
-                    Student* targetStudent = nullptr;
-                    for (Student* st : target->getEnrolledStudents()) {
-                        if (st->getId() == studentId) {
-                            targetStudent = st;
-                            break;
+                    cout << "Enter reason for correction: ";
+                    cin.ignore();
+                    string reason;
+                    getline(cin, reason);
+
+                    try {
+                        s->addCorrection(st, newStatus, lecturer, reason);
+                        cout << ">> [SUCCESS] Attendance corrected successfully.\n";
+
+                        ofstream logFile("data/attendance_events.txt", ios::app);
+                        if (logFile.is_open()) {
+                            time_t now = time(nullptr);
+                            logFile << "CORRECTION," << sId << "," << ccode << "," << sessId << ","
+                                    << newStatus << "," << lecturer->getId() << "," << now << "\n";
+                            logFile.close();
                         }
-                    }
-
-                    if (!targetStudent) {
-                        cout << ">> Error: Student not enrolled in this course!\n";
-                    } else {
-                        cout << "Enter Corrected Status (present/late/absent): ";
-                        string newStatus;
-                        cin >> newStatus;
-
-                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                        cout << "Enter Reason for correction: ";
-                        string reason;
-                        getline(cin, reason);
-
-                        try {
-                            targetSession->addCorrection(targetStudent, newStatus, lecturer, reason);
-                            cout << ">> [SUCCESS] Correction record appended successfully!\n";
-
-                            ofstream logFile("data/attendance_events.txt", ios::app);
-                            if (logFile.is_open()) {
-                                time_t now = time(nullptr);
-                                logFile << "ATTENDANCE_CORRECTION,"
-                                        << targetStudent->getId() << ","
-                                        << target->getCode() << ","
-                                        << sessionId << ","
-                                        << newStatus << ","
-                                        << lecturer->getId() << ","
-                                        << "\"" << reason << "\","
-                                        << now << "\n";
-                                logFile.close();
-                            }
-                        } catch (const DomainException& e) {
-                            cout << ">> [FAILED] Correction Error: " << e.what() << "\n";
-                        }
+                    } catch (const DomainException& e) {
+                        cout << ">> Correction Failed: " << e.what() << "\n";
                     }
                 }
             }
             pauseConsole();
         }
-        else if (choice == 4) { // Attendance & Eligibility Reporting
+        else if (choice == 4) {
             cout << "Enter Course Code: ";
-            string code;
-            cin >> code;
+            string ccode;
+            cin >> ccode;
 
-            Course* target = findCourseByCode(allCourses, code);
+            Course* target = findCourseByCode(allCourses, ccode);
             if (!target) {
-                cout << ">> Error: Course not found!\n";
+                cout << ">> Course not found!\n";
             } else {
-                cout << "Enter Eligibility Threshold % (Default 80): ";
-                double th = 80.0;
-                cin >> th;
-                if (cin.fail() || th <= 0.0) {
-                    cin.clear();
-                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                    th = 80.0;
+                cout << "\n=== Attendance Report for " << target->getCode() << " (" << target->getTitle() << ") ===\n";
+                int totalCourseSessions = 0;
+                for (AttendanceSession* sess : allSessions) {
+                    if (sess->getCourseCode() == target->getCode()) {
+                        totalCourseSessions++;
+                    }
                 }
 
-                generateAttendanceReport(target, th);
+                cout << "Total sessions held: " << totalCourseSessions << "\n";
+                for (Student* st : allStudents) {
+                    bool enrolled = false;
+                    for (Course* c : st->getEnrolledCourses()) {
+                        if (c->getCode() == target->getCode()) {
+                            enrolled = true;
+                            break;
+                        }
+                    }
+
+                    if (enrolled) {
+                        int attended = 0;
+                        for (AttendanceSession* sess : allSessions) {
+                            if (sess->getCourseCode() == target->getCode()) {
+                                for (const auto& rec : sess->getRecords()) {
+                                    if (rec.getStudent()->getId() == st->getId() &&
+                                       (rec.getStatus() == "present" || rec.getStatus() == "late")) {
+                                        attended++;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        double pct = (totalCourseSessions == 0) ? 0.0 : (static_cast<double>(attended) / totalCourseSessions) * 100.0;
+                        cout << " - Student: " << st->getName() << " (" << st->getId() << ") | Attended: "
+                             << attended << "/" << totalCourseSessions << " (" << pct << "%) | Status: "
+                             << (pct >= 80.0 ? "Eligible" : "At Risk") << "\n";
+                    }
+                }
             }
             pauseConsole();
         }
@@ -875,9 +962,8 @@ int main() {
     try {
         loadedUsers = userRepo.loadFromFile("data/users.txt");
     } catch (const exception&) {
-        cout<< "Warning : could not load user records from data/users.txt. startig with empty user lists. \n";
+        cout << "Warning : could not load user records from data/users.txt. starting with empty user lists. \n";
     }
-
 
     for (const auto& u : loadedUsers) {
         if (u.role == "Student") {
@@ -890,7 +976,7 @@ int main() {
     }
 
     // Default users
-   if (lecturers.empty()) {
+    if (lecturers.empty()) {
         lecturers.push_back(new Lecturer("COL001", "Dr. Udaya", "udaya@uni.lk", "pass123"));
         lecturers.push_back(new Lecturer("COL002", "Dr. Krishanth", "krishanth@uni.lk", "pass456"));
         lecturers.push_back(new Lecturer("COL003", "Dr. Sanka", "sanka@uni.lk", "pass789"));
@@ -904,7 +990,7 @@ int main() {
         admins.push_back(new Admin("A001", "Administrator", "admin@uni.lk", "adminpw"));
     }
 
- // 2. Courses Persistence Load
+    // 2. Courses Persistence Load
     vector<Course*> allCourses;
     Repository<CourseRecord> courseRepo;
     vector<CourseRecord> loadedCourses;
@@ -938,9 +1024,7 @@ int main() {
         }
     }
 
-
     loadTimetables("data/timeTable.txt", allCourses);
-
 
     Repository<EnrolmentRecord> enrolRepo;
     try {
@@ -988,7 +1072,20 @@ int main() {
             cout << "Enter selection (1-" << students.size() << "): ";
             size_t idx;
             if (cin >> idx && idx >= 1 && idx <= students.size()) {
-                handleStudentSession(students[idx - 1], allCourses, students);
+                Student* selectedStudent = students[idx - 1];
+                string enteredPass;
+                cout << "Enter Password for " << selectedStudent->getName() << ": ";
+                cin >> enteredPass;
+
+                if (!selectedStudent->checkPassword(enteredPass)) {
+                    cout << ">> [ACCESS DENIED] Incorrect password!\n";
+                } else {
+                    handleStudentSession(selectedStudent, allCourses, students);
+                }
+            } else {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << ">> Invalid selection!\n";
             }
         } else if (mainChoice == 2) {
             cout << "\nSelect Lecturer Login:\n";
@@ -998,10 +1095,54 @@ int main() {
             cout << "Enter selection (1-" << lecturers.size() << "): ";
             size_t idx;
             if (cin >> idx && idx >= 1 && idx <= lecturers.size()) {
-                handleLecturerSession(lecturers[idx - 1], allCourses);
+                Lecturer* selectedLecturer = lecturers[idx - 1];
+                string enteredPass;
+                cout << "Enter Password for " << selectedLecturer->getName() << ": ";
+                cin >> enteredPass;
+
+                if (!selectedLecturer->checkPassword(enteredPass)) {
+                    cout << ">> [ACCESS DENIED] Incorrect password!\n";
+                } else {
+                    handleLecturerSession(selectedLecturer, allCourses, students);
+                }
+            } else {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cout << ">> Invalid selection!\n";
             }
         } else if (mainChoice == 3) {
-            handleAdminSession(admins[0], allCourses,students,lecturers,admins);
+            if (admins.empty()) {
+                cout << ">> Error: No administrator account available!\n";
+                continue;
+            }
+
+            Admin* selectedAdmin = admins[0];
+            if (admins.size() > 1) {
+                cout << "\nSelect Admin Login:\n";
+                for (size_t i = 0; i < admins.size(); ++i) {
+                    cout << " " << (i + 1) << ". " << admins[i]->getName() << " (" << admins[i]->getId() << ")\n";
+                }
+                cout << "Enter selection (1-" << admins.size() << "): ";
+                size_t idx;
+                if (cin >> idx && idx >= 1 && idx <= admins.size()) {
+                    selectedAdmin = admins[idx - 1];
+                } else {
+                    cin.clear();
+                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                    cout << ">> Invalid selection!\n";
+                    continue;
+                }
+            }
+
+            string enteredPass;
+            cout << "Enter Password for Admin (" << selectedAdmin->getName() << "): ";
+            cin >> enteredPass;
+
+            if (!selectedAdmin->checkPassword(enteredPass)) {
+                cout << ">> [ACCESS DENIED] Incorrect password!\n";
+            } else {
+                handleAdminSession(selectedAdmin, allCourses, students, lecturers, admins);
+            }
         } else if (mainChoice == 4) {
             runAutomatedTests(allCourses, students, lecturers);
         } else if (mainChoice == 5) {

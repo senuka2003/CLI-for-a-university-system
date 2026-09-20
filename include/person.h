@@ -19,7 +19,13 @@ public:
     std::string getId() const;
     std::string getName() const;
     std::string getEmail() const;
+    std::string getPassword() const;
     bool checkPassword(const std::string& attempt) const;
+
+    void setId(const std::string& newId);
+    void setName(const std::string& newName);
+    void setEmail(const std::string& newEmail);
+    void setPassword(const std::string& newPassword);
 };
 
 #endif // PERSON_H

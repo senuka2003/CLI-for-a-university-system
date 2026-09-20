@@ -7,14 +7,12 @@
 
 class RotatingCodeCapture : public AttendanceCapture {
 private:
-    static constexpr int CODE_VALID_SECONDS = 30;
-    
-    std::string currentCode;
-    time_t codeExpiry;
+    static std::string currentCode;
+    static time_t codeExpiry;
+    static const int CODE_VALID_SECONDS = 600; // 10 minutes
 
     std::string generateCode() const;
     void regenerateCode();
-    bool isCodeExpired() const;
 
 public:
     RotatingCodeCapture();
@@ -24,6 +22,7 @@ public:
     std::string captureNext() override;
     void endSession() override;
 
+    bool isCodeExpired() const;
     std::string getCurrentCode() const;
 };
 

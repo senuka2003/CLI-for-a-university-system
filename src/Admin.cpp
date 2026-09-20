@@ -22,13 +22,13 @@ void syncUsersToFile(const vector<Student*>& students,
                      const vector<Admin*>& admins) {
     vector<UserRecord> records;
     for (const auto* s : students) {
-        records.emplace_back(s->getId(), s->getName(), s->getEmail(), "pw111", "Student");
+        records.emplace_back(s->getId(), s->getName(), s->getEmail(), s->getPassword(), "Student");
     }
     for (const auto* l : lecturers) {
-        records.emplace_back(l->getId(), l->getName(), l->getEmail(), "pass123", "Lecturer");
+        records.emplace_back(l->getId(), l->getName(), l->getEmail(), l->getPassword(), "Lecturer");
     }
     for (const auto* a : admins) {
-        records.emplace_back(a->getId(), a->getName(), a->getEmail(), "adminpw", "Admin");
+        records.emplace_back(a->getId(), a->getName(), a->getEmail(), a->getPassword(), "Admin");
     }
     Repository<UserRecord> repo;
     repo.saveToFile("data/users.txt", records);
@@ -86,8 +86,9 @@ void Admin::manageUsers(vector<Student*>& students,
         cout << "\n=== User Management ===\n";
         cout << "1. List All Users\n";
         cout << "2. Create New User (Student / Lecturer / Admin)\n";
-        cout << "3. Remove User\n";
-        cout << "4. Back to Main Admin Menu\n";
+        cout << "3. Edit Existing User\n";
+        cout << "4. Remove User\n";
+        cout << "5. Back to Main Admin Menu\n";
         cout << "Enter choice: ";
 
         int ch;
@@ -99,15 +100,15 @@ void Admin::manageUsers(vector<Student*>& students,
 
         if (ch == 1) {
             cout << "\n--- Current Users ---\n";
-            for (const auto* s : students) cout << " [Student] " << s->getId() << " - " << s->getName() << "\n";
-            for (const auto* l : lecturers) cout << " [Lecturer] " << l->getId() << " - " << l->getName() << "\n";
-            for (const auto* a : admins) cout << " [Admin] " << a->getId() << " - " << a->getName() << "\n";
+            for (const auto* s : students) cout << " [Student]  " << s->getId() << " - " << s->getName() << " (" << s->getEmail() << ")\n";
+            for (const auto* l : lecturers) cout << " [Lecturer] " << l->getId() << " - " << l->getName() << " (" << l->getEmail() << ")\n";
+            for (const auto* a : admins) cout << " [Admin]    " << a->getId() << " - " << a->getName() << " (" << a->getEmail() << ")\n";
         } else if (ch == 2) {
             cout << "\nSelect Type (1: Student, 2: Lecturer, 3: Admin): ";
             int r; cin >> r;
             string uid, uname, uemail, upass;
             cout << "ID: "; cin >> uid;
-            cout << "Name: "; cin >> uname;
+            cout << "Name: "; cin.ignore(); getline(cin, uname);
             cout << "Email: "; cin >> uemail;
             cout << "Password: "; cin >> upass;
 
@@ -118,6 +119,95 @@ void Admin::manageUsers(vector<Student*>& students,
             syncUsersToFile(students, lecturers, admins);
             cout << ">> User created and saved to data/users.txt!\n";
         } else if (ch == 3) {
+            string uid;
+            cout << "\nEnter User ID to edit: ";
+            cin >> uid;
+
+            Person* targetUser = nullptr;
+            for (auto* s : students) { if (s->getId() == uid) { targetUser = s; break; } }
+            if (!targetUser) {
+                for (auto* l : lecturers) { if (l->getId() == uid) { targetUser = l; break; } }
+            }
+            if (!targetUser) {
+                for (auto* a : admins) { if (a->getId() == uid) { targetUser = a; break; } }
+            }
+
+            if (!targetUser) {
+                cout << ">> Error: User not found with ID '" << uid << "'!\n";
+                continue;
+            }
+
+            cout << "\n============================================\n";
+            cout << "Editing User: [" << targetUser->getId() << "] " << targetUser->getName() << "\n";
+            cout << "Role: " << targetUser->getRole() << "\n";
+            cout << "============================================\n";
+            cout << "1. Edit ID\n";
+            cout << "2. Edit Name\n";
+            cout << "3. Edit Email\n";
+            cout << "4. Edit Password\n";
+            cout << "5. Cancel\n";
+            cout << "Enter choice (1-5): ";
+
+            int editChoice;
+            if (!(cin >> editChoice)) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                continue;
+            }
+
+            if (editChoice == 1) {
+                string newId;
+                cout << "Current ID: " << targetUser->getId() << "\n";
+                cout << "Enter New ID: ";
+                cin >> newId;
+
+                // ID eka duplicate da kiyala balanna
+                bool exists = false;
+                for (const auto* s : students) if (s->getId() == newId) exists = true;
+                for (const auto* l : lecturers) if (l->getId() == newId) exists = true;
+                for (const auto* a : admins) if (a->getId() == newId) exists = true;
+
+                if (exists) {
+                    cout << ">> Error: User ID '" << newId << "' is already taken!\n";
+                } else {
+                    targetUser->setId(newId);
+                    syncUsersToFile(students, lecturers, admins);
+                    cout << ">> User ID updated successfully!\n";
+                }
+            } else if (editChoice == 2) {
+                string newName;
+                cout << "Current Name: " << targetUser->getName() << "\n";
+                cout << "Enter New Name: ";
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                getline(cin, newName);
+                if (!newName.empty()) {
+                    targetUser->setName(newName);
+                    syncUsersToFile(students, lecturers, admins);
+                    cout << ">> Name updated successfully!\n";
+                } else {
+                    cout << ">> [Warning] Name cannot be empty.\n";
+                }
+            } else if (editChoice == 3) {
+                string newEmail;
+                cout << "Current Email: " << targetUser->getEmail() << "\n";
+                cout << "Enter New Email: ";
+                cin >> newEmail;
+                targetUser->setEmail(newEmail);
+                syncUsersToFile(students, lecturers, admins);
+                cout << ">> Email updated successfully!\n";
+            } else if (editChoice == 4) {
+                string newPass;
+                cout << "Enter New Password: ";
+                cin >> newPass;
+                targetUser->setPassword(newPass);
+                syncUsersToFile(students, lecturers, admins);
+                cout << ">> Password updated successfully!\n";
+            } else if (editChoice == 5) {
+                cout << ">> Edit cancelled.\n";
+            } else {
+                cout << ">> Invalid choice!\n";
+            }
+        } else if (ch == 4) {
             string uid;
             cout << "Enter ID to remove: "; cin >> uid;
             auto sIt = find_if(students.begin(), students.end(), [&](Student* s){ return s->getId() == uid; });
@@ -133,7 +223,7 @@ void Admin::manageUsers(vector<Student*>& students,
                 continue;
             }
             cout << ">> User not found!\n";
-        } else if (ch == 4) break;
+        } else if (ch == 5) break;
     }
 }
 
@@ -218,180 +308,180 @@ void Admin::manageCourses(vector<Course*>& allCourses, const vector<Lecturer*>& 
                 cout << ">> Course " << code << " created and persisted to data/courses.txt!\n";
 
                 char addSlotChoice;
-        cout << "Do you want to add a Time Slot for this new course? (y/n): ";
-        cin >> addSlotChoice;
+                cout << "Do you want to add a Time Slot for this new course? (y/n): ";
+                cin >> addSlotChoice;
 
-        if (addSlotChoice == 'y' || addSlotChoice == 'Y') {
-            string day, start, end, loc;
-            cout << "Enter Day (e.g., Monday): ";
-            cin >> day;
-            cout << "Enter Start Time (HH:MM): ";
-            cin >> start;
-            cout << "Enter End Time (HH:MM): ";
-            cin >> end;
-            cout << "Enter Location: ";
-            cin.ignore();
-            getline(cin, loc);
+                if (addSlotChoice == 'y' || addSlotChoice == 'Y') {
+                    string day, start, end, loc;
+                    cout << "Enter Day (e.g., Monday): ";
+                    cin >> day;
+                    cout << "Enter Start Time (HH:MM): ";
+                    cin >> start;
+                    cout << "Enter End Time (HH:MM): ";
+                    cin >> end;
+                    cout << "Enter Location: ";
+                    cin.ignore();
+                    getline(cin, loc);
 
-            TimeSlot newSlot(day, start, end, loc);
-            newCourse->addTimeSlot(newSlot);
-            saveTimeSlotToFile("data/timeslot.txt", newCourse->getCode(), newSlot);
+                    TimeSlot newSlot(day, start, end, loc);
+                    newCourse->addTimeSlot(newSlot);
+                    saveTimeSlotToFile("data/timeslot.txt", newCourse->getCode(), newSlot);
 
-            cout << ">> Time slot added successfully!\n";
-        }
+                    cout << ">> Time slot added successfully!\n";
+                }
             } else {
                 cout << ">> Invalid course type selected!\n";
             }
 
-         } else if (ch == 3) {
-        string code;
-        cout << "Enter Course Code to Edit: ";
-        cin >> code;
+        } else if (ch == 3) {
+            string code;
+            cout << "Enter Course Code to Edit: ";
+            cin >> code;
 
-        auto it = find_if(allCourses.begin(), allCourses.end(), [&](Course* c){ return c->getCode() == code; });
-        if (it == allCourses.end()) {
-            cout << ">> Course not found!\n";
-            continue;
-        }
-
-        Course* targetCourse = *it;
-        cout << "\n============================================\n";
-        cout << "Editing Course: [" << targetCourse->getCode() << "] " << targetCourse->getTitle() << "\n";
-        cout << "Current Lecturer: " << (targetCourse->getLecturer() ? targetCourse->getLecturer()->getName() : "None") << "\n";
-        cout << "============================================\n";
-        cout << "1. Edit Title\n";
-        cout << "2. Edit Capacity\n";
-        cout << "3. Change Assigned Lecturer\n";
-        cout << "4. Add New Time Slot\n";
-        cout << "5. Edit Existing Time Slot\n";
-        cout << "6. Delete a Time Slot\n";
-        cout << "Enter your choice (1-6): ";
-        int editChoice;
-        cin >> editChoice;
-
-        if (editChoice == 1) {
-            cout << "Current Title: " << targetCourse->getTitle() << "\n";
-            cout << "Enter New Title: ";
-            cin.ignore();
-            string newTitle;
-            getline(cin, newTitle);
-            targetCourse->setTitle(newTitle);
-            syncCoursesToFile(allCourses);
-            cout << ">> Course title updated!\n";
-
-        } else if (editChoice == 2) {
-            cout << "Current Capacity: " << targetCourse->getCapacity() << "\n";
-            cout << "Enter New Capacity: ";
-            int newCap;
-            cin >> newCap;
-            targetCourse->setCapacity(newCap);
-            syncCoursesToFile(allCourses);
-            cout << ">> Course capacity updated!\n";
-
-        } else if (editChoice == 3) {
-            cout << "\nAvailable Lecturers:\n";
-            for (const auto* l : lecturers) {
-                cout << "  [" << l->getId() << "] " << l->getName() << "\n";
-            }
-            cout << "Enter Lecturer ID to assign: ";
-            string lecId;
-            cin >> lecId;
-
-            Lecturer* assignedLec = nullptr;
-            for (auto* l : lecturers) {
-                if (l->getId() == lecId) {
-                    assignedLec = l;
-                    break;
-                }
+            auto it = find_if(allCourses.begin(), allCourses.end(), [&](Course* c){ return c->getCode() == code; });
+            if (it == allCourses.end()) {
+                cout << ">> Course not found!\n";
+                continue;
             }
 
-            if (assignedLec) {
-                targetCourse->setLecturer(assignedLec);
+            Course* targetCourse = *it;
+            cout << "\n============================================\n";
+            cout << "Editing Course: [" << targetCourse->getCode() << "] " << targetCourse->getTitle() << "\n";
+            cout << "Current Lecturer: " << (targetCourse->getLecturer() ? targetCourse->getLecturer()->getName() : "None") << "\n";
+            cout << "============================================\n";
+            cout << "1. Edit Title\n";
+            cout << "2. Edit Capacity\n";
+            cout << "3. Change Assigned Lecturer\n";
+            cout << "4. Add New Time Slot\n";
+            cout << "5. Edit Existing Time Slot\n";
+            cout << "6. Delete a Time Slot\n";
+            cout << "Enter your choice (1-6): ";
+            int editChoice;
+            cin >> editChoice;
+
+            if (editChoice == 1) {
+                cout << "Current Title: " << targetCourse->getTitle() << "\n";
+                cout << "Enter New Title: ";
+                cin.ignore();
+                string newTitle;
+                getline(cin, newTitle);
+                targetCourse->setTitle(newTitle);
                 syncCoursesToFile(allCourses);
-                cout << ">> Assigned lecturer updated successfully!\n";
-            } else {
-                cout << ">> Lecturer ID not found!\n";
-            }
+                cout << ">> Course title updated!\n";
 
-        } else if (editChoice == 4) {
-            string day, start, end, loc;
-            cout << "Enter Day (e.g., Monday): ";
-            cin >> day;
-            cout << "Enter Start Time (HH:MM): ";
-            cin >> start;
-            cout << "Enter End Time (HH:MM): ";
-            cin >> end;
-            cout << "Enter Location (e.g., Lab 1): ";
-            cin.ignore();
-            getline(cin, loc);
+            } else if (editChoice == 2) {
+                cout << "Current Capacity: " << targetCourse->getCapacity() << "\n";
+                cout << "Enter New Capacity: ";
+                int newCap;
+                cin >> newCap;
+                targetCourse->setCapacity(newCap);
+                syncCoursesToFile(allCourses);
+                cout << ">> Course capacity updated!\n";
 
-            TimeSlot newSlot(day, start, end, loc);
-            targetCourse->addTimeSlot(newSlot);
-            syncAllTimeSlotsToFile("data/timeTable.txt", allCourses);
-            cout << ">> Time slot added successfully!\n";
-
-        } else if (editChoice == 5) {
-            auto& slots = targetCourse->getTimetable().getSlots();
-            if (slots.empty()) {
-                cout << ">> No time slots found for this course!\n";
-            } else {
-                cout << "\nCurrent Time Slots:\n";
-                for (size_t i = 0; i < slots.size(); ++i) {
-                    cout << "  " << (i + 1) << ". " << slots[i].getDay() 
-                         << " [" << slots[i].getStartTime() << " - " << slots[i].getEndTime() 
-                         << "] @ " << slots[i].getLocation() << "\n";
+            } else if (editChoice == 3) {
+                cout << "\nAvailable Lecturers:\n";
+                for (const auto* l : lecturers) {
+                    cout << "  [" << l->getId() << "] " << l->getName() << "\n";
                 }
-                cout << "Select slot number to edit (1-" << slots.size() << "): ";
-                size_t slotIdx;
-                cin >> slotIdx;
+                cout << "Enter Lecturer ID to assign: ";
+                string lecId;
+                cin >> lecId;
 
-                if (slotIdx >= 1 && slotIdx <= slots.size()) {
-                    string day, start, end, loc;
-                    cout << "Enter New Day: ";
-                    cin >> day;
-                    cout << "Enter New Start Time (HH:MM): ";
-                    cin >> start;
-                    cout << "Enter New End Time (HH:MM): ";
-                    cin >> end;
-                    cout << "Enter New Location: ";
-                    cin.ignore();
-                    getline(cin, loc);
+                Lecturer* assignedLec = nullptr;
+                for (auto* l : lecturers) {
+                    if (l->getId() == lecId) {
+                        assignedLec = l;
+                        break;
+                    }
+                }
 
-                   targetCourse->updateTimeSlot(slotIdx - 1, TimeSlot(day, start, end, loc));
-                    syncAllTimeSlotsToFile("data/timeTable.txt", allCourses);
-                    cout << ">> Time slot updated successfully!\n";
+                if (assignedLec) {
+                    targetCourse->setLecturer(assignedLec);
+                    syncCoursesToFile(allCourses);
+                    cout << ">> Assigned lecturer updated successfully!\n";
                 } else {
-                    cout << ">> Invalid slot number!\n";
+                    cout << ">> Lecturer ID not found!\n";
                 }
-            }
 
-        } else if (editChoice == 6) {
-            auto& slots = targetCourse->getTimetable().getSlots();
-            if (slots.empty()) {
-                cout << ">> No time slots found to delete!\n";
-            } else {
-                cout << "\nCurrent Time Slots:\n";
-                for (size_t i = 0; i < slots.size(); ++i) {
-                    cout << "  " << (i + 1) << ". " << slots[i].getDay() 
-                         << " [" << slots[i].getStartTime() << " - " << slots[i].getEndTime() 
-                         << "] @ " << slots[i].getLocation() << "\n";
-                }
-                cout << "Select slot number to delete (1-" << slots.size() << "): ";
-                size_t slotIdx;
-                cin >> slotIdx;
+            } else if (editChoice == 4) {
+                string day, start, end, loc;
+                cout << "Enter Day (e.g., Monday): ";
+                cin >> day;
+                cout << "Enter Start Time (HH:MM): ";
+                cin >> start;
+                cout << "Enter End Time (HH:MM): ";
+                cin >> end;
+                cout << "Enter Location (e.g., Lab 1): ";
+                cin.ignore();
+                getline(cin, loc);
 
-                if (slotIdx >= 1 && slotIdx <= slots.size()) {
-                    targetCourse->removeTimeSlot(slotIdx - 1);
-                    syncAllTimeSlotsToFile("data/timeTable.txt", allCourses);
-                    cout << ">> Time slot deleted successfully!\n";
+                TimeSlot newSlot(day, start, end, loc);
+                targetCourse->addTimeSlot(newSlot);
+                syncAllTimeSlotsToFile("data/timeTable.txt", allCourses);
+                cout << ">> Time slot added successfully!\n";
+
+            } else if (editChoice == 5) {
+                auto& slots = targetCourse->getTimetable().getSlots();
+                if (slots.empty()) {
+                    cout << ">> No time slots found for this course!\n";
                 } else {
-                    cout << ">> Invalid slot number!\n";
-                }
-            }
+                    cout << "\nCurrent Time Slots:\n";
+                    for (size_t i = 0; i < slots.size(); ++i) {
+                        cout << "  " << (i + 1) << ". " << slots[i].getDay() 
+                             << " [" << slots[i].getStartTime() << " - " << slots[i].getEndTime() 
+                             << "] @ " << slots[i].getLocation() << "\n";
+                    }
+                    cout << "Select slot number to edit (1-" << slots.size() << "): ";
+                    size_t slotIdx;
+                    cin >> slotIdx;
 
-        } else {
-            cout << ">> Invalid choice!\n";
-        }
+                    if (slotIdx >= 1 && slotIdx <= slots.size()) {
+                        string day, start, end, loc;
+                        cout << "Enter New Day: ";
+                        cin >> day;
+                        cout << "Enter New Start Time (HH:MM): ";
+                        cin >> start;
+                        cout << "Enter New End Time (HH:MM): ";
+                        cin >> end;
+                        cout << "Enter New Location: ";
+                        cin.ignore();
+                        getline(cin, loc);
+
+                        targetCourse->updateTimeSlot(slotIdx - 1, TimeSlot(day, start, end, loc));
+                        syncAllTimeSlotsToFile("data/timeTable.txt", allCourses);
+                        cout << ">> Time slot updated successfully!\n";
+                    } else {
+                        cout << ">> Invalid slot number!\n";
+                    }
+                }
+
+            } else if (editChoice == 6) {
+                auto& slots = targetCourse->getTimetable().getSlots();
+                if (slots.empty()) {
+                    cout << ">> No time slots found to delete!\n";
+                } else {
+                    cout << "\nCurrent Time Slots:\n";
+                    for (size_t i = 0; i < slots.size(); ++i) {
+                        cout << "  " << (i + 1) << ". " << slots[i].getDay() 
+                             << " [" << slots[i].getStartTime() << " - " << slots[i].getEndTime() 
+                             << "] @ " << slots[i].getLocation() << "\n";
+                    }
+                    cout << "Select slot number to delete (1-" << slots.size() << "): ";
+                    size_t slotIdx;
+                    cin >> slotIdx;
+
+                    if (slotIdx >= 1 && slotIdx <= slots.size()) {
+                        targetCourse->removeTimeSlot(slotIdx - 1);
+                        syncAllTimeSlotsToFile("data/timeTable.txt", allCourses);
+                        cout << ">> Time slot deleted successfully!\n";
+                    } else {
+                        cout << ">> Invalid slot number!\n";
+                    }
+                }
+
+            } else {
+                cout << ">> Invalid choice!\n";
+            }
         } else if (ch == 4) {
             string code;
             cout << "Enter Course Code to Remove: "; cin >> code;
